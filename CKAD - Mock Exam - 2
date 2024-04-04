@@ -1,0 +1,339 @@
+Q1
+Create a deployment called my-webapp with image: nginx, label tier:frontend and 2 replicas. Expose the deployment as a NodePort service with name front-end-service , port: 80 and NodePort: 30083
+
+Solution:
+
+create the deployment
+
+kubectl create deploy my-webapp --image=nginx --replicas=2
+label the deployment
+
+kubectl label deploy my-webapp tier=frontend
+create the service
+
+kubectl expose deploy my-webapp --name=front-end-service --type=NodePort --port=80 --dry-run=client -oyaml > my-webapp.svc.yaml
+# edit the service manifest to add node port
+nodePort: 30083
+# create the svc
+kubectl apply -f my-webapp.svc.yaml
+
+
+Q2
+Add a taint to the node node01 of the cluster. Use the specification below:
+
+key: app_type
+value: alpha
+effect: NoSchedule
+Create a pod called alpha, image: redis with toleration to node01.
+
+Solution:
+
+taint the node
+
+kubectl taint node node01 app_type=alpha:NoSchedule # node/node01 tainted
+verify the taint
+
+kubectl describe node node01 | grep Taints # Taints: app_type=alpha:NoSchedule
+pod manifest pod.yaml with toleration:
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: alpha
+spec:
+  containers:
+  - image: redis
+    name: alpha
+  tolerations:
+    - key: app_type
+      value: alpha
+      effect: NoSchedule
+verify
+
+kubectl get po -o wide
+
+NAME                         READY   STATUS    RESTARTS   AGE   IP             NODE           NOMINATED NODE   READINESS GATES
+alpha                        1/1     Running   0          27s   10.244.192.3   node01         <none>           <none>
+
+
+Q3
+Apply a label app_type=beta to node controlplane. Create a new deployment called beta-apps with image: nginx and replicas: 3. Set Node Affinity to the deployment to place the PODs on controlplane only.
+
+Solution:
+
+label the node
+
+kubectl label node controlplane  app_type=beta
+create the deployment
+
+kubectl create deploy beta-apps --image=nginx --replicas=3 --dry-run=client -oyaml > beta-apps.yaml
+update the manifest to add node affinity
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: app_type
+          operator: In
+          values: ["beta"]
+apply the manifets beta-apps.yaml
+
+kubectl apply -f beta-apps.yaml
+validate
+
+kubectl get po -owide
+
+NAME                         READY   STATUS    RESTARTS   AGE    IP             NODE           NOMINATED NODE   READINESS GATES
+beta-apps-574fd8858c-gpk2s   1/1     Running   0          18s    10.244.0.6     controlplane   <none>           <none>
+beta-apps-574fd8858c-nqpxd   1/1     Running   0          18s    10.244.0.7     controlplane   <none>           <none>
+beta-apps-574fd8858c-xsq8r   1/1     Running   0          18s    10.244.0.5     controlplane   <none>           <none>
+
+
+Q4
+Create a new Ingress Resource for the service my-video-service to be made available at the URL: http://ckad-mock-exam-solution.com:30093/video.
+
+To create an ingress resource, the following details are: -
+
+annotation: nginx.ingress.kubernetes.io/rewrite-target: /
+host: ckad-mock-exam-solution.com
+path: /video
+
+Solution:
+
+get the service details
+
+# kubectl get svc my-video-service -o yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: "2023-08-15T07:39:48Z"
+  name: my-video-service
+  namespace: default
+  resourceVersion: "5038"
+  uid: 67a6728b-f6c5-43c8-8c11-171050c1807d
+spec:
+  clusterIP: 10.103.124.68
+  clusterIPs:
+  - 10.103.124.68
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: webapp-video
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}
+the ingress manifest ingress.yaml would look like:
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: video-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: ckad-mock-exam-solution.com
+    http:
+      paths:
+      - path: /video
+        pathType: Prefix
+        backend:
+          service:
+            name: my-video-service
+            port:
+              number: 8080
+deploy the ingress
+
+kubectl apply -f ingrss.yaml
+validate
+
+curl http://ckad-mock-exam-solution.com:30093/video
+<!doctype html>
+<title>Hello from Flask</title>
+<body style="background: #30336b;">
+<div style="color: #e4e4e4;
+    text-align:  center;
+    height: 90px;
+    vertical-align:  middle;">
+    <img src="https://res.cloudinary.com/cloudusthad/image/upload/v1547052431/video.jpg">
+</div>
+</body>
+
+
+Q5
+We have deployed a new pod called pod-with-rprobe. This Pod has an initial delay before it is Ready. Update the newly created pod pod-with-rprobe with a readinessProbe using the given spec:
+
+httpGet path: /ready
+httpGet port: 8080
+
+Solution:
+
+fetch the pod manifest
+
+kubectl get po pod-with-rprobe -oyaml > pod-with-rprobe.yaml
+check the pod spec to get the delay
+
+...
+- env:
+    - name: APP_START_DELAY
+      value: "180"
+...
+update the manifest with readiness probe
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 180
+delete the pod
+
+kubectl delete po pod-with-rprobe
+apply the updated manifest
+
+kubectl apply -f pod-with-rprobe.yaml
+validate after 180 seconds
+
+NAME              READY   STATUS    RESTARTS   AGE
+pod-with-rprobe   1/1     Running   0          185s
+
+
+Q6
+Create a new pod called nginx1401 in the default namespace with the image nginx. Add a livenessProbe to the container to restart it if the command ls /var/www/html/probe fails. This check should start after a delay of 10 seconds and run every 60 seconds.
+
+Solution:
+
+generate the pod manifest
+
+kubectl run nginx1401 --image=nginx --dry-run=client -oyaml > nginx1401.yaml
+update the manifest to add liveness probe
+
+livenessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 60
+  exec:
+    command: ["ls", "/var/www/html/probe"]
+apply the manifest
+
+kubectl apply -f nginx1401.yaml
+validate
+
+kubectl get po nginx1401 
+
+NAME        READY   STATUS    RESTARTS   AGE
+nginx1401   1/1     Running   0          24s
+
+
+Q7
+Create a job called whalesay with image docker/whalesay and command cowsay I am going to ace CKAD!.
+
+completions: 10
+backoffLimit: 6
+restartPolicy: Never
+
+Solution:
+
+the manifest whalesay.yaml would look like this
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: whalesay
+spec:
+  completions: 10
+  backoffLimit: 6
+  template:
+    metadata:
+      name: whalesay
+    spec:
+        containers:
+        - image: docker/whalesay
+          name: whalesay
+          command: ["/bin/sh", "-c", "cowsay I am going to ace CKAD!"]
+        restartPolicy: Never
+apply and validate
+
+kubectl apply -f whalesay.yaml
+
+kubectl get job
+NAME       COMPLETIONS   DURATION   AGE
+whalesay   5/10          44s        44s
+
+kubectl get po 
+whalesay-6dcvg                  0/1     Completed           0               22s
+whalesay-cvhpf                  0/1     Completed           0               27s
+whalesay-dfhcq                  0/1     Completed           0               37s
+whalesay-f2xzk                  0/1     Completed           0               17s
+whalesay-h722v                  0/1     Completed           0               32s
+whalesay-jm8zv                  0/1     Completed           0               42s
+whalesay-rfzlf                  0/1     Completed           0               62s
+whalesay-wd92n                  0/1     ContainerCreating   0               1s
+whalesay-wjw9z                  0/1     Completed           0               7s
+whalesay-xprkx                  0/1     Completed           0               12s
+
+
+Q8
+Create a pod called multi-pod with two containers.
+
+Container 1: name: jupiter, image: nginx
+Container 2: name: europa, image: busybox command: sleep 4800
+Environment Variables:
+
+Container 1: type: planet
+Container 2: type: moon
+
+Solution:
+
+the pod manifest would look like this
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-pod
+spec:
+  containers:
+  - name: jupiter
+    image: nginx
+    env:
+    - name: type
+      value: "planet"
+  - name: europa
+    image: busybox
+    command: ["sleep", "4800"]
+    env:
+    - name: type
+      value: "moon"
+
+
+Q9
+Create a PersistentVolume called custom-volume with:
+
+size: 50MiB
+reclaim policy:retain
+Access Modes: ReadWriteMany
+hostPath: /opt/data
+
+Solution:
+
+the pv manifest would look like this
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: custom-volume
+spec:
+  capacity:
+    storage: 50Mi
+  persistentVolumeReclaimPolicy: Retain
+  accessModes:
+  - ReadWriteMany
+  hostPath:
+    path: /opt/data
