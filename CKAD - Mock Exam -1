@@ -1,1 +1,297 @@
+Q1
+Deploy a pod named nginx-448839 using the nginx:alpine image.
 
+Solution:
+kubectl run nginx-448839 --image=nginx:alpine
+
+kubectl get po
+NAME           READY   STATUS    RESTARTS   AGE
+nginx-448839   1/1     Running   0          4s
+
+Q2
+Create a namespace named apx-z993845
+
+Solution:
+kubectl create ns apx-z993845
+
+kubectl get ns
+
+NAME              STATUS   AGE
+apx-z993845       Active   75s
+
+Q3
+Create a new Deployment named httpd-frontend with 3 replicas using image httpd:2.4-alpine
+
+Solution:
+
+kubectl create deploy httpd-frontend --image=httpd:2.4-alpine --replicas=3
+
+kubectl get deploy
+NAME             READY   UP-TO-DATE   AVAILABLE   AGE
+httpd-frontend   3/3     3            3           40s
+
+
+Q4
+Deploy a messaging pod using the redis:alpine image with the labels set to tier=msg.
+
+Solution:
+
+kubectl run messaging --image=redis:alpine
+
+kubectl label po messaging tier=msg
+
+kubectl get po -l tier=msg
+
+NAME        READY   STATUS    RESTARTS   AGE
+messaging   1/1     Running   0          94s
+
+
+Q5
+A replicaset rs-d33393 is created. However the pods are not coming up. Identify and fix the issue. Once fixed, ensure the ReplicaSet has 4 Ready replicas.
+
+Solution:
+
+spot the issue: invalid image
+
+kubectl describe rs rs-d33393 | grep Image
+# Image:      busyboxXXXXXXX
+get the replica set manifest
+
+kubectl get rs rs-d33393 -o yaml > rs.yaml
+delete the old replica set
+
+kubectl delete rs rs-d33393
+change the image and apply
+
+kubectl apply -f rs.yaml
+
+
+Q6
+Create a service messaging-service to expose the redis deployment in the marketing namespace within the cluster on port 6379.
+
+Solution:
+
+kubectl expose -n marketing deploy redis --port 6379 --name=messaging-service
+
+kubectl get svc
+
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   90m
+
+
+Q7
+Update the environment variable on the pod webapp-color to use a green background.
+
+Solution:
+
+kubectl get po webapp-color -oyaml > webapp-color.yaml
+# update the environment variable APP_COLOR to green in the manifest
+
+# delete the po
+kubectl delete po webapp-color
+
+# re-create the po
+kubectl apply -f webapp-color.yaml
+
+
+Q8
+Create a new ConfigMap named cm-3392845. Use the spec given on the below.
+
+ConfigName Name: cm-3392845
+
+Data: DB_NAME=SQL3322
+Data: DB_HOST=sql322.mycompany.com
+Data: DB_PORT=3306
+
+Solution:
+
+the manifest cm.yaml would look like this
+
+apiVersion: v1
+kind: ConfigMap
+metadata: 
+  name: cm-3392845
+data:
+  DB_NAME: "SQL3322"
+  DB_HOST: "sql322.mycompany.com"
+  DB_PORT: "3306"
+directly using imperative command:
+
+kubectl create cm cm-3392845 --from-literal=DB_NAME=SQL3322 --from-literal=DB_HOST=sql322.mycompany.com --from-literal=DB_PORT=3306
+create and validate
+
+# create
+kubectl apply -f cm.yaml
+
+# validate
+kubectl describe cm cm-3392845
+Name:         cm-3392845
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+Data
+====
+DB_HOST:
+----
+sql322.mycompany.com
+DB_NAME:
+----
+SQL3322
+DB_PORT:
+----
+3306
+
+
+Q9
+Create a new Secret named db-secret-xxdf with the data given (on the below). Secret Name: db-secret-xxdf
+
+Secret 1: DB_Host=sql01
+Secret 2: DB_User=root
+Secret 3: DB_Password=password123
+
+Solution:
+
+kubectl create secret generic db-secret-xxdf --from-literal=DB_User=root --from-literal=DB_Host=sql01 --from-literal=DB_Password=password123
+validate
+
+kubectl describe secret db-secret-xxdf
+
+controlplane ~ ➜  kubectl describe secret db-secret-xxdf
+Name:         db-secret-xxdf
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+Type:  Opaque
+Data
+====
+DB_Password:  11 bytes
+DB_User:      4 bytes
+DB_Host:      5 bytes
+
+
+Q10
+Update pod app-sec-kff3345 to run as Root user and with the SYS_TIME capability. Pod Name: app-sec-kff3345 Image Name: ubuntu SecurityContext: Capability SYS_TIME
+
+Solution:
+
+get the pod spec:
+
+kubectl get po app-sec-kff3345 -oyaml > app-sec-kff3345.yaml
+update the container:
+
+...
+securityContext:
+  runAsUser: 0
+  capabilities:
+    add: ["SYS_TIME"]
+...
+delete the pod
+
+kubectl delete po app-sec-kff3345
+re-create the pod
+
+kubectl apply -f app-sec-kff3345.yaml
+validate
+
+kubectl get po app-sec-kff3345
+
+NAME              READY   STATUS    RESTARTS   AGE
+app-sec-kff3345   1/1     Running   0          44s
+
+
+Q11
+Export the logs of the e-com-1123 pod to the file /opt/outputs/e-com-1123.logs
+
+Solution:
+
+check the pod namespace
+
+kubectl get po -A | grep e-com-1123
+e-commerce    e-com-1123                             1/1     Running   0              49m
+export the logs
+
+kubectl logs e-com-1123 -n e-commerce > /opt/outputs/e-com-1123.logs
+
+
+Q12
+Create a Persistent Volume with the given specification.
+
+Volume Name: pv-analytics
+Storage: 100Mi
+Access modes: ReadWriteMany
+Host Path: /pv/data-analytics
+
+Solution:
+
+the manifest pv.yaml would look like this
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-analytics
+spec:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 100Mi
+  hostPath:
+    path: /pv/data-analytics
+
+
+Q13
+Create a redis deployment using the image redis:alpine with 1 replica and label app=redis. Expose it via a ClusterIP service called redis on port 6379. Create a new Ingress Type NetworkPolicy called redis-access which allows only the pods with label access=redis to access the deployment.
+
+Solution:
+
+create the pod
+
+kubectl create deploy redis --image=redis:alpine --replicas=1
+create the service
+
+kubectl expose deploy redis --port=6379
+create a network policy manifest and deploy it
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-access
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              access: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+
+
+Q14
+Create a Pod called sega with two containers:
+
+Container 1: Name tails with image busybox and command: sleep 3600.
+Container 2: Name sonic with image nginx and Environment variable: NGINX_PORT with the value 8080.
+
+Solution:
+
+create the pod manifest and deploy it
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sega
+spec:
+  containers:
+  - name: tails
+    image: busybox
+    command: ["sleep", "3600"]
+  - name: sonic
+    image: nginx
+    env:
+    - name: NGINX_PORT
+      value: "8080"
