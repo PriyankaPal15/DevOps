@@ -1,0 +1,59 @@
+How to create own Image?
+1. OS -ubuntu
+2. Update apt repo
+3. Install dependencies using apt
+4. Install Python dependencies using pip
+5. Copy source code to /opt folder
+6. Run the web server using "flask" command
+
+Dockerfile
+---
+FROM Ubuntu
+
+RUN apt-get update 
+RUN apt-get install python 
+
+RUN pip install flask
+RUN pip install flask-mysql
+
+COPY . /opt/source-code 
+
+ENTRYPOINT FLASK_APP=/opt/source-code/app.py flask run 
+---
+
+# docker build Dockerfile -t mumshad/my-custom-app
+# docker push mumshad/my-custom-app
+# docker history mumshad/my-custom-app
+
+i. When docker builds a image it build it in layered architecture. 
+ii. docker layers are cached
+
+------
+
+Commands and Arguments in Docker:
+
+# docker run ubuntu sleep 5
+
+Dockerfile
+---
+FROM ubuntu
+CMD sleep 5
+---
+# docker build -t ubuntu-sleeper .
+# docker run ubuntu-sleeper
+# docker run ubuntu-sleeper sleep 10        ### command at start-up sleep 10 secs
+
+The ENTRYPOINT instruction is like the command instruction, as in one can specify the program that will be run when the container starts.
+Dockerfile
+---
+FROM ubuntu
+ENTRYPOINT [ "sleep" ]
+CMD [ "5" ]
+---
+# docker run ubuntu-sleeper 10
+# docker run --name ubuntu-sleeper --entrypoint sleep2.0 ubuntu-sleeper 10
+
+
+
+
+
